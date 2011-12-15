@@ -1,30 +1,13 @@
 -module(eulogy).
 
+-include("eulogy.hrl").
+
 % API exports
 -export([
     migrate_application/1, migrate_application/2,
     migrate_dir/1, migrate_dir/2,
     migrate_file/1, migrate_file/2
   ]).
-
-% data types
--type filename()  :: string() | binary().
-
--type db_info() ::
-  {user,        string()} |
-  {password,    string()} |
-  {host,        string()} |
-  {port,        integer()}|
-  {database,    string()}.
-
-% records
--record(db_info, {
-    user = "" :: string(),
-    password = "" :: string(),
-    host = "" :: string(),
-    port = 0 :: integer(),
-    database = "" :: string()
-  }).
 
 -spec migrate_application(App) -> {ok, migrated} | {error, Reason} when
   App :: atom(),
@@ -35,7 +18,7 @@ migrate_application(App) ->
 
 -spec migrate_application(App, DbInfo) -> {ok, migrated} | {error, Reason} when
   App :: atom(),
-  DbInfo :: db_info(),
+  DbInfo :: #db_info{},
   Reason :: atom().
 
 migrate_application(App, DbInfo) ->
@@ -50,7 +33,7 @@ migrate_dir(Dir) ->
 
 -spec migrate_dir(Dir, DbInfo) -> {ok, migrated} | {error, Reason} when
   Dir :: filename(),
-  DbInfo :: db_info(),
+  DbInfo :: #db_info{},
   Reason :: atom().
 
 migrate_dir(Dir, DbInfo) ->
@@ -63,9 +46,9 @@ migrate_dir(Dir, DbInfo) ->
 migrate_file(File) ->
   ok.
 
--spec migrate_dir(File, DbInfo) -> {ok, migrated} | {error, Reason} when
+-spec migrate_file(File, DbInfo) -> {ok, migrated} | {error, Reason} when
   File :: filename(),
-  DbInfo :: db_info(),
+  DbInfo :: #db_info{},
   Reason :: atom().
 
 migrate_file(File, DbInfo) ->
