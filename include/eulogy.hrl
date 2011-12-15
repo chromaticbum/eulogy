@@ -3,6 +3,7 @@
 
 % records
 -record(db_info, {
+    adapter = "" :: string(),
     user = "" :: string(),
     password = "" :: string(),
     host = "" :: string(),
