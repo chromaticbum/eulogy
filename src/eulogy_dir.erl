@@ -7,18 +7,20 @@
 
 % internal exports for eulogy
 -export([
-    db_info/1,
-    db_info_file/1
+    db_info/1
   ]).
 
 -spec db_info(Dir) -> {ok, DbInfo} | {error, Reason} when
   Dir :: filename(),
   DbInfo :: #db_info{},
   Reason :: atom().
-
 db_info(Dir) ->
   db_info_file(filename:join(Dir, ?CONFIG_FILENAME)).
 
+-spec db_info_file(File) -> {ok, DbInfo} | {error, Reason} when
+  File :: filename(),
+  DbInfo :: #db_info{},
+  Reason :: atom().
 db_info_file(File) ->
   case file:consult(File) of
     {ok, Terms} -> db_info_terms(Terms);

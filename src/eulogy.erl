@@ -35,7 +35,7 @@ migrate_dir(Dir, DbInfo) ->
 
   stop_connections(),
 
-  ok.
+  {ok, migrated}.
 
 
 -spec generate_migration(Dir, Name) -> {ok, FileName} | {error, Reason} when
