@@ -13,7 +13,6 @@
 -spec migrate_dir(Dir) -> {ok, migrated} | {error, Reason} when
   Dir :: filename(),
   Reason :: atom().
-
 migrate_dir(Dir) ->
   DbInfo = eulogy_dir:db_info(Dir),
   migrate_dir(Dir, DbInfo).
@@ -23,7 +22,6 @@ migrate_dir(Dir) ->
   Dir :: filename(),
   DbInfo :: #db_info{},
   Reason :: atom().
-
 migrate_dir(Dir, DbInfo) ->
   prepare_statements(),
   start_connection(DbInfo),
@@ -68,13 +66,21 @@ ensure_migration_table() ->
       );">>).
 
 
--spec run_migrations(Dir) -> ok | {error, Reason} when
-  Dir :: filename(),
-  Reason :: atom().
+-spec run_migrations(Dir) -> ok when
+  Dir :: filename().
 run_migrations(Dir) ->
   Version = current_version(),
-  MigrationFiles = migration_files(Dir, Version),
+  Files = migration_files(Dir, Version),
 
+  lists:foreach(
+    fun(File) ->
+        Migration = file:consult(filename:join(Dir, File)),
+        case Migration of
+          {ok, Conf} -> eulogy_migration:run(Conf, up);
+          {error, Reason} -> ok
+        end
+    end, Files
+  ),
   ok.
 
 
