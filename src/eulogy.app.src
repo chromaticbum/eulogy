@@ -4,7 +4,7 @@
     {vsn, "0.0.1"},
     {modules, [eulogy_app, eulogy, eulogy_dir]},
     {registered, []},
-    {applications, [kernel, stdlib, emysql]},
+    {applications, [kernel, stdlib]},
     {env, []}
   ]
 }.

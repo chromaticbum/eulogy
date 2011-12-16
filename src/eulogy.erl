@@ -23,19 +23,22 @@ migrate_dir(Dir) ->
   DbInfo :: #db_info{},
   Reason :: atom().
 migrate_dir(Dir, DbInfo) ->
-  prepare_statements(),
-  start_connection(DbInfo),
-
-  ensure_database(DbInfo),
-  start_data_connection(DbInfo),
-
-  ensure_migration_table(),
-
-  run_migrations(Dir),
-
-  stop_connections(),
+  Adapter = create_adapter(DbInfo),
+  run_migrations(Dir, Adapter),
 
   {ok, migrated}.
+
+
+-spec create_adapter(DbInfo) -> Adapter when
+  DbInfo :: #db_info{},
+  Adapter :: #adapter{}.
+create_adapter(#db_info{adapter = Adapter} = DbInfo) ->
+  Module = list_to_atom(lists:concat(["eu_", Adapter])),
+
+  #adapter{
+    module = Module,
+    info = Module:create(DbInfo)
+  }.
 
 
 -spec generate_migration(Dir, Name) -> {ok, FileName} | {error, Reason} when
@@ -52,24 +55,11 @@ generate_migration(Dir, Name) ->
   file:close(File).
 
 
--spec ensure_database(DbInfo) -> ok when
-  DbInfo :: #db_info{}.
-ensure_database(#db_info{database = Database}) ->
-  emysql:execute(mysql_pool, list_to_binary(lists:concat(["create schema if not exists ", Database]))).
-
-
--spec ensure_migration_table() -> ok.
-ensure_migration_table() ->
-  emysql:execute(data_pool, <<"
-    create table if not exists migrations (
-        migration varchar(255) primary key
-      );">>).
-
-
--spec run_migrations(Dir) -> ok when
-  Dir :: filename().
-run_migrations(Dir) ->
-  Version = current_version(),
+-spec run_migrations(Dir, Adapter) -> ok when
+  Dir :: filename(),
+  Adapter :: #adapter{}.
+run_migrations(Dir, #adapter{module = Module, info = Info} = Adapter) ->
+  Version = Module:version(Info),
   Files = migration_files(Dir, Version),
 
   lists:foreach(
@@ -77,8 +67,8 @@ run_migrations(Dir) ->
         Migration = file:consult(filename:join(Dir, File)),
         case Migration of
           {ok, Conf} ->
-            eulogy_migration:run(Conf, up),
-            update_version(Version);
+            eulogy_migration:run(Adapter, Conf, up),
+            Module:update_version(Info, Version);
           {error, Reason} -> ok
         end
     end, Files
@@ -140,68 +130,6 @@ list_dir(Dir, RegEx) ->
   end.
 
 
--spec current_version() -> Version when
-  Version :: version().
-current_version() ->
-  #result_packet{rows = Rows} = emysql:execute(data_pool, current_version, []),
-
-  case Rows of
-    [[Version]] -> binary_to_list(Version);
-    [] -> ""
-  end.
-
-
--spec update_version(Version) -> ok when
-  Version :: version().
-update_version(Version) ->
-  emysql:execute(data_pool, update_version, [Version]).
-
-
--spec start_connection(DbInfo) -> ok | {error, Reason} when
-  DbInfo :: #db_info{},
-  Reason :: atom().
-start_connection(
-  #db_info{
-    user = User, password = Password,
-    host = Host, port = Port
-  }
-) ->
-  emysql:add_pool(mysql_pool, 1,
-    User, Password, Host, Port,
-    "mysql", utf8).
-
-
--spec start_data_connection(DbInfo) -> ok | {error, Reason} when
-  DbInfo :: #db_info{},
-  Reason :: atom().
-start_data_connection(
-  #db_info{
-    user = User,
-    password = Password,
-    host = Host,
-    port = Port,
-    database = Database
-  }
-) ->
-  emysql:add_pool(data_pool, 1,
-    User, Password, Host, Port,
-    Database, utf8).
-
-
--spec stop_connections() -> ok.
-stop_connections() ->
-  emysql:remove_pool(mysql_pool),
-  emysql:remove_pool(data_pool),
-
-  ok.
-
--spec prepare_statements() -> ok.
-prepare_statements() ->
-  emysql:prepare(current_version, <<"select migration from migrations order by migration desc limit 1;">>),
-  emysql:prepare(update_version, <<"insert into migrations(migration) values(?);">>),
-
-  ok.
-
 % TESTS
 
 -define(TEST_DIR, "./test").
@@ -216,57 +144,8 @@ db_info1() ->
     database = "eulogy_test"
   }.
 
-start_connection_test() ->
-  start_connection(db_info1()),
-  emysql:increment_pool_size(mysql_pool, 1),
-  emysql:remove_pool(mysql_pool).
 
-ensure_database_test() ->
-  DbInfo = db_info1(),
-  prepare_statements(),
-  start_connection(DbInfo),
-  drop_database(DbInfo),
-
-  ensure_database(DbInfo),
-
-  start_data_connection(DbInfo),
-  drop_database(DbInfo),
-  stop_connections().
-
-start_data_connection_test() ->
-  DbInfo = db_info1(),
-  prepare_statements(),
-  start_connection(DbInfo),
-  ensure_database(DbInfo),
-
-  start_data_connection(DbInfo),
-
-  emysql:increment_pool_size(data_pool, 1),
-  stop_connections().
-
-ensure_migration_table_test() ->
-  DbInfo = db_info1(),
-  prepare_statements(),
-  start_connection(DbInfo),
-  ensure_database(DbInfo),
-  start_data_connection(DbInfo),
-
-  ensure_migration_table(),
-
-  #result_packet{} = emysql:execute(data_pool, <<"select migration from migrations">>),
-  stop_connections().
-
-current_and_update_version_test() ->
-  DbInfo = db_info1(),
-  bootstrap(DbInfo),
-
-  update_version("1234"),
-  update_version("2222"),
-  update_version("1110"),
-
-  ?assertEqual("2222", current_version()),
-
-  shutdown().
+% TESTS
 
 version_migrations_test() ->
   Match = [
@@ -298,20 +177,4 @@ generate_migration_test() ->
   ?assertEqual(1, length(Files)),
   [File] = Files,
   ok = file:delete(filename:join(?TEST_DIR, File)).
-
-drop_database(#db_info{database = Database}) ->
-  emysql:execute(mysql_pool, list_to_binary(lists:concat(["drop schema if exists ", Database]))).
-
-bootstrap(DbInfo) ->
-  prepare_statements(),
-  start_connection(DbInfo),
-  ensure_database(DbInfo),
-  start_data_connection(DbInfo),
-
-  ensure_migration_table(),
-  emysql:execute(data_pool, <<"start transaction;">>).
-
-shutdown() ->
-  emysql:execute(data_pool, <<"rollback;">>),
-  stop_connections().
 

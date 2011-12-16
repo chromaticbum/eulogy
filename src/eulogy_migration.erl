@@ -6,45 +6,17 @@
 
 % API exports
 -export([
-    run/2
+    run/3
   ]).
 
--type table() :: atom().
--type column() :: atom().
--type column_type() ::
-  int |
-  float |
-  decimal |
-  string |
-  timestamp |
-  datetime.
-
--type create_table() :: {create_table, table()}.
--type restore_table() :: {restore_table, table()}.
--type drop_table() :: {drop_table, table()}.
--type add_column() :: {add_column, {table(), column(), column_type()}}.
--type restore_column() :: {restore_column, {table(), column()}}.
--type remove_column() :: {remove_column, {table(), column(), column_type()}}.
-
--type migration_instruction() ::
-  create_table() |
-  restore_table() |
-  drop_table() |
-  add_column() |
-  restore_column() |
-  remove_column().
-
--type migration_direction() :: up | down.
-
--type migration() :: [migration_instruction()].
-
--spec run(Migration, Direction) -> ok when
+-spec run(Adapter, Migration, Direction) -> ok when
+  Adapter :: #adapter{},
   Migration :: migration(),
   Direction :: migration_direction().
-run(Migration, Direction) ->
+run(Adapter, Migration, Direction) ->
   case Direction of
-    up -> run(Migration);
-    down -> run(invert_migration(Migration))
+    up -> run(Adapter, Migration);
+    down -> run(Adapter, invert_migration(Migration))
   end.
 
 
@@ -63,46 +35,41 @@ invert_migration(Migration) ->
 -spec invert_instruction(Instruction) -> Instruction2 when
   Instruction :: migration_instruction(),
   Instruction2 :: migration_instruction().
-invert_instruction({create_table, Table}) ->
+invert_instruction({create_table, Table, _Columns}) ->
   {drop_table, Table};
 invert_instruction({drop_table, Table}) ->
   {restore_table, Table};
-invert_instruction({add_column, {Table, Column, _Type}}) ->
-  {remove_column, {Table, Column}};
+invert_instruction({add_column, {Table, Column}}) ->
+  {remove_column, {Table, element(1, Column)}};
 invert_instruction({remove_column, {Table, Column}}) ->
   {restore_column, {Table, Column}}.
 
 
--spec run(Migration) -> ok when
+-spec run(Adapter, Migration) -> ok when
+  Adapter :: #adapter{},
   Migration :: migration().
-run(Migration) ->
+run(Adapter, Migration) ->
   lists:foreach(
     fun(Instruction) ->
-        execute(Instruction)
+        execute(Adapter, Instruction)
     end, Migration
   ),
 
   ok.
 
 
--spec execute(Instruction) -> ok when
+-spec execute(Adapter, Instruction) -> ok when
+  Adapter :: #adapter{},
   Instruction :: migration_instruction().
-execute({create_table, Table}) ->
-  ok;
-execute({drop_table, Table}) ->
-  ok;
-execute({add_column, {Table, Column, Type}}) ->
-  ok;
-execute({remove_column, {Table, Column, Type}}) ->
-  ok.
+execute(Adapter, Instruction) -> ok.
 
 % TESTS
 
 migration1() ->
   [
-    {create_table, players},
+    {create_table, players, [{id, int, [primary]}]},
     {drop_table, games},
-    {add_column, {players, name, string}},
+    {add_column, {players, {name, string}}},
     {remove_column, {players, country}}
   ].
 
@@ -119,7 +86,7 @@ invert_migration_test() ->
 invert_instruction_test() ->
   ?assertEqual(
     {drop_table, players},
-    invert_instruction({create_table, players})
+    invert_instruction({create_table, players, [{id, int, [primary]}]})
   ),
   ?assertEqual(
     {restore_table, players},
@@ -127,7 +94,7 @@ invert_instruction_test() ->
   ),
   ?assertEqual(
     {remove_column, {players, name}},
-    invert_instruction({add_column, {players, name, string}})
+    invert_instruction({add_column, {players, {name, string}}})
   ),
   ?assertEqual(
     {restore_column, {players, name}},
