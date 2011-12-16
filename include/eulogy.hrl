@@ -1,5 +1,6 @@
 % data types
 -type filename()  :: string() | binary().
+-type version() :: string().
 
 % records
 -record(db_info, {

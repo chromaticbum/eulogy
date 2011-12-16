@@ -28,8 +28,10 @@
 
 -type migration_instruction() ::
   create_table() |
+  restore_table() |
   drop_table() |
   add_column() |
+  restore_column() |
   remove_column().
 
 -type migration_direction() :: up | down.

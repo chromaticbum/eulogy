@@ -62,7 +62,7 @@ ensure_database(#db_info{database = Database}) ->
 ensure_migration_table() ->
   emysql:execute(data_pool, <<"
     create table if not exists migrations (
-        migration varchar(255) unique key
+        migration varchar(255) primary key
       );">>).
 
 
@@ -73,10 +73,12 @@ run_migrations(Dir) ->
   Files = migration_files(Dir, Version),
 
   lists:foreach(
-    fun(File) ->
+    fun({Version, File}) ->
         Migration = file:consult(filename:join(Dir, File)),
         case Migration of
-          {ok, Conf} -> eulogy_migration:run(Conf, up);
+          {ok, Conf} ->
+            eulogy_migration:run(Conf, up),
+            update_version(Version);
           {error, Reason} -> ok
         end
     end, Files
@@ -84,9 +86,11 @@ run_migrations(Dir) ->
   ok.
 
 
--spec migration_files(Dir, Version) -> [filename()] | {error, Reason} when
+-spec migration_files(Dir, Version) -> [{Version2, File}] | {error, Reason} when
   Dir :: filename(),
   Version :: string(),
+  Version2 :: version(),
+  File :: string(),
   Reason :: atom().
 migration_files(Dir, Version) ->
   case list_dir(Dir, "^.*_(\\d{14,14})") of
@@ -137,7 +141,7 @@ list_dir(Dir, RegEx) ->
 
 
 -spec current_version() -> Version when
-  Version :: string().
+  Version :: version().
 current_version() ->
   #result_packet{rows = Rows} = emysql:execute(data_pool, current_version, []),
 
@@ -148,7 +152,7 @@ current_version() ->
 
 
 -spec update_version(Version) -> ok when
-  Version :: integer().
+  Version :: version().
 update_version(Version) ->
   emysql:execute(data_pool, update_version, [Version]).
 
