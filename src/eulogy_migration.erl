@@ -61,7 +61,14 @@ run(Adapter, Migration) ->
 -spec execute(Adapter, Instruction) -> ok when
   Adapter :: #adapter{},
   Instruction :: migration_instruction().
-execute(Adapter, Instruction) -> ok.
+execute(#adapter{module = Module, info = Info}, {create_table, Table, Columns}) ->
+  Module:create_table(Info, Table, Columns);
+execute(#adapter{module = Module, info = Info}, {drop_table, Table}) ->
+  Module:drop_table(Info, Table);
+execute(#adapter{module = Module, info = Info}, {add_column, Table, Column}) ->
+  Module:add_column(Info, Table, Column);
+execute(#adapter{module = Module, info = Info}, {drop_column, Table, Column}) ->
+  Module:drop_column(Info, Table, Column).
 
 % TESTS
 
@@ -72,6 +79,19 @@ migration1() ->
     {add_column, {players, {name, string}}},
     {remove_column, {players, country}}
   ].
+
+eu_test1() ->
+  #adapter{
+    module = eu_test,
+    info = eu_test
+  }.
+
+execute_test() ->
+  Adapter = eu_test1(),
+  ?assertEqual(create_table, execute(Adapter, {create_table, players, []})),
+  ?assertEqual(drop_table, execute(Adapter, {drop_table, players})),
+  ?assertEqual(add_column, execute(Adapter, {add_column, players, {country, string, []}})),
+  ?assertEqual(drop_column, execute(Adapter, {drop_column, players, country})).
 
 invert_migration_test() ->
   ?assertEqual(
