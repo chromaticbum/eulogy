@@ -2,11 +2,10 @@
   [
     {description, "Datbase migration tool."},
     {vsn, "0.0.1"},
-    {modules, [eulogy_app]},
+    {modules, [eulogy_app, eulogy, eulogy_dir]},
     {registered, []},
-    {applications, [kernel, stdlib]},
-    {env, []},
-    {mod, {eulogy_app, []}}
+    {applications, [kernel, stdlib, emysql]},
+    {env, []}
   ]
 }.
 
