@@ -4,11 +4,29 @@
 -include_lib("emysql/include/emysql.hrl").
 -include("eulogy.hrl").
 
+-define(MIGRATION_DIR, "eulogy").
+
 % API exports
 -export([
+    migrate_app/1, migrate_app/2,
     migrate_dir/1, migrate_dir/2,
     generate_migration/2
   ]).
+
+
+-spec migrate_app(App) -> ok | {error, Reason} when
+  App :: atom(),
+  Reason :: atom().
+migrate_app(App) ->
+  migrate_dir(filename:join(code:priv_dir(App), ?MIGRATION_DIR)).
+
+
+-spec migrate_app(App, DbInfo) -> ok when
+  App :: atom(),
+  DbInfo :: #db_info{}.
+migrate_app(App, DbInfo) ->
+  migrate_dir(filename:join(code:priv_dir(App), ?MIGRATION_DIR), DbInfo).
+
 
 -spec migrate_dir(Dir) -> ok | {error, Reason} when
   Dir :: filename(),
