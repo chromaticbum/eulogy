@@ -20,28 +20,50 @@ run(Adapter, Migration, Direction) ->
     down -> invert_migration(Migration)
   end,
 
-  run_instructions(
-    fun(Adapter2, Migration3, Instruction) -> run_instruction(Adapter2, Migration3, Instruction, Direction) end,
-    Adapter, Migration2, Migration2#migration.instructions
+  case ensure_instructions(Adapter, Migration2, Migration2#migration.instructions) of
+    {error, Reason} -> {error, Reason};
+    Instructions -> io:format("Persisting: ~p~n", [Instructions]), persist_instructions(Adapter, Migration2, Instructions, Direction)
+  end.
+
+
+-spec persist_instructions(Adapter, Migration, Instructions, Direction) -> ok | {error, string()} when
+  Adapter :: #adapter{},
+  Migration :: migration(),
+  Instructions :: migration_instructions(),
+  Direction :: migration_direction().
+persist_instructions(Adapter, Migration, Instructions, up) ->
+  lists:foreach(
+    fun(Instruction) -> eulogy_adapter:store_instruction(Adapter, Migration, Instruction) end,
+    Instructions
+  );
+persist_instructions(Adapter, Migration, Instructions, down) ->
+  lists:foreach(
+    fun(Instruction) -> eulogy_adapter:delete_instruction(Adapter, Migration, Instruction) end,
+    Instructions
   ).
+
 
 
 -spec invert_migration(Migration) -> Migration2 when
   Migration :: migration(),
   Migration2 :: migration().
 invert_migration(#migration{instructions = Instructions} = Migration) ->
-  Instructions2 = lists:reverse(
-    lists:map(
-      fun(Instruction) -> invert_instruction(Instruction) end,
-      Instructions
-    )
-  ),
-  Migration#migration{instructions = Instructions2}.
+  Migration#migration{instructions = invert_instructions(Instructions)}.
+
+
+-spec invert_instructions(Instructions) -> Instructions2 when
+  Instructions :: migration_instructions(),
+  Instructions2 :: migration_instructions().
+invert_instructions(Instructions) ->
+  lists:reverse(lists:map(
+    fun(Instruction) -> invert_instruction(Instruction) end,
+    Instructions
+  )).
 
 
 -spec invert_instruction(Instruction) -> Instruction2 when
   Instruction :: migration_instruction(),
-  Instruction2 :: migration_instruction_inverted().
+  Instruction2 :: migration_instruction().
 invert_instruction({create_table, Table, _Columns}) ->
   {drop_table, Table};
 invert_instruction({drop_table, Table}) ->
@@ -49,24 +71,11 @@ invert_instruction({drop_table, Table}) ->
 invert_instruction({add_column, Table, Column}) ->
   {drop_column, Table, element(1, Column)};
 invert_instruction({drop_column, Table, Column}) ->
-  {restore_column, Table, Column}.
-
-
--spec run_instruction(Adapter, Migration, Instruction, Direction) -> ok | {error, string} when
-  Adapter :: #adapter{},
-  Migration :: migration(),
-  Instruction :: migration_instruction(),
-  Direction :: migration_direction().
-run_instruction(Adapter, Migration, Instruction, up) ->
-  case execute(Adapter, Migration, Instruction) of
-    ok -> eulogy_adapter:store_instruction(Adapter, Migration, Instruction);
-    {error, Reason} -> {error, Reason}
-  end;
-run_instruction(Adapter, Migration, Instruction, down) ->
-  case execute(Adapter, Migration, Instruction) of
-    ok -> eulogy_adapter:delete_instruction(Adapter, Migration, Instruction);
-    {error, Reason} -> {error, Reason}
-  end.
+  {restore_column, Table, Column};
+invert_instruction({restore_table, Table}) ->
+  {drop_table, Table};
+invert_instruction({restore_column, Table, Column}) ->
+  {drop_column, Table, Column}.
 
 
 -spec execute(Adapter, Migration, Instruction) -> ok | {error, string()} when
@@ -95,24 +104,46 @@ restore_table(Adapter, #migration{version = Version} = Migration, Table) ->
   case eulogy_adapter:restore_table_instructions(Adapter, Version, Table) of
     {error, Reason} -> {error, Reason};
     Instructions ->
-      run_instructions(
-        fun(Adapter2, Migration2, Instruction) -> execute(Adapter2, Migration2, Instruction) end,
-        Adapter, Migration, Instructions
-      )
+      case ensure_instructions(Adapter, Migration, Instructions) of
+        {error, Reason} -> {error, Reason};
+        _ -> ok
+      end
   end.
 
 
--spec run_instructions(Fun, Adapter, Migration, Instructions) -> ok | {error, string} when
-  Fun :: Fun,
+-spec ensure_instructions(Adapter, Migration, Instructions) -> migration_instructions() | {error, string()} when
   Adapter :: #adapter{},
   Migration :: migration(),
   Instructions :: migration_instructions().
-run_instructions(_Fun, _Adapter, _Migration, []) ->
-  ok;
-run_instructions(Fun, Adapter, Migration, [Instruction | Instructions]) ->
-  case Fun(Adapter, Migration, Instruction) of
-    ok -> run_instructions(Fun, Adapter, Migration, Instructions);
-    {error, Reason} -> {error, Reason}
+ensure_instructions(Adapter, Migration, Instructions) ->
+  case run_instructions(Adapter, Migration, Instructions) of
+    {error, Reason, FailedInstructions} ->
+      io:format("Rolling back: ~p~n", [Reason]),
+      run_instructions(Adapter, Migration, invert_instructions(FailedInstructions)),
+      {error, Reason};
+    Instructions2 -> Instructions2
+  end.
+
+
+-spec run_instructions(Adapter, Migration, Instructions) -> migration_instructions() | {error, string(), migration_instructions()} when
+  Adapter :: #adapter{},
+  Migration :: migration(),
+  Instructions :: migration_instructions().
+run_instructions(Adapter, Migration, Instructions) ->
+  run_instructions(Adapter, Migration, Instructions, []).
+
+
+-spec run_instructions(Adapter, Migration, Instructions, AccInstructions) -> migration_instructions() | {error, string(), migration_instructions()} when
+  Adapter :: #adapter{},
+  Migration :: migration(),
+  Instructions :: migration_instructions(),
+  AccInstructions :: migration_instructions().
+run_instructions(_Adapter, _Migration, [], AccInstructions) ->
+  lists:reverse(AccInstructions);
+run_instructions(Adapter, Migration, [Instruction | Instructions], AccInstructions) ->
+  case execute(Adapter, Migration, Instruction) of
+    ok -> run_instructions(Adapter, Migration, Instructions, [Instruction | AccInstructions]);
+    {error, Reason} -> {error, Reason, lists:reverse(AccInstructions)}
   end.
 
 
