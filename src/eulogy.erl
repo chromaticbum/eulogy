@@ -58,8 +58,8 @@ generate_migration(Dir, Name) ->
 -spec run_migrations(Dir, Adapter) -> ok when
   Dir :: filename(),
   Adapter :: #adapter{}.
-run_migrations(Dir, #adapter{module = Module, info = Info} = Adapter) ->
-  Version = Module:version(Info),
+run_migrations(Dir, Adapter) ->
+  Version = eulogy_adapter:version(Adapter),
   Files = migration_files(Dir, Version),
 
   lists:foreach(
@@ -68,7 +68,7 @@ run_migrations(Dir, #adapter{module = Module, info = Info} = Adapter) ->
         case Migration of
           {ok, Conf} ->
             eulogy_migration:run(Adapter, Conf, up),
-            Module:update_version(Info, Version);
+            eulogy_adapter:update_version(Adapter, Version);
           {error, Reason} -> ok
         end
     end, Files

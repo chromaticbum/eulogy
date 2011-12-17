@@ -61,14 +61,14 @@ run(Adapter, Migration) ->
 -spec execute(Adapter, Instruction) -> ok when
   Adapter :: #adapter{},
   Instruction :: migration_instruction().
-execute(#adapter{module = Module, info = Info}, {create_table, Table, Columns}) ->
-  Module:create_table(Info, Table, Columns);
-execute(#adapter{module = Module, info = Info}, {drop_table, Table}) ->
-  Module:drop_table(Info, Table);
-execute(#adapter{module = Module, info = Info}, {add_column, Table, Column}) ->
-  Module:add_column(Info, Table, Column);
-execute(#adapter{module = Module, info = Info}, {drop_column, Table, Column}) ->
-  Module:drop_column(Info, Table, Column).
+execute(Adapter, {create_table, Table, Columns}) ->
+  eulogy_adapter:create_table(Adapter, Table, Columns);
+execute(Adapter, {drop_table, Table}) ->
+  eulogy_adapter:drop_table(Adapter, Table);
+execute(Adapter, {add_column, Table, Column}) ->
+  eulogy_adapter:add_column(Adapter, Table, Column);
+execute(Adapter, {drop_column, Table, Column}) ->
+  eulogy_adapter:drop_column(Adapter, Table, Column).
 
 % TESTS
 
