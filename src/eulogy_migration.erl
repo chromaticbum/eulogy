@@ -22,11 +22,11 @@ run(Adapter, Migration, Direction) ->
 
   case ensure_instructions(Adapter, Migration2, Migration2#migration.instructions) of
     {error, Reason} -> {error, Reason};
-    Instructions -> io:format("Persisting: ~p~n", [Instructions]), persist_instructions(Adapter, Migration2, Instructions, Direction)
+    Instructions -> persist_instructions(Adapter, Migration2, Instructions, Direction)
   end.
 
 
--spec persist_instructions(Adapter, Migration, Instructions, Direction) -> ok | {error, string()} when
+-spec persist_instructions(Adapter, Migration, Instructions, Direction) -> ok when
   Adapter :: #adapter{},
   Migration :: migration(),
   Instructions :: migration_instructions(),
@@ -63,7 +63,7 @@ invert_instructions(Instructions) ->
 
 -spec invert_instruction(Instruction) -> Instruction2 when
   Instruction :: migration_instruction(),
-  Instruction2 :: migration_instruction().
+  Instruction2 :: migration_instruction_inverted().
 invert_instruction({create_table, Table, _Columns}) ->
   {drop_table, Table};
 invert_instruction({drop_table, Table}) ->
@@ -118,7 +118,7 @@ restore_table(Adapter, #migration{version = Version} = Migration, Table) ->
 ensure_instructions(Adapter, Migration, Instructions) ->
   case run_instructions(Adapter, Migration, Instructions) of
     {error, Reason, FailedInstructions} ->
-      io:format("Rolling back: ~p~n", [Reason]),
+      error_logger:error_msg("Rolling back (~s): ~p~n", [Reason, FailedInstructions]),
       run_instructions(Adapter, Migration, invert_instructions(FailedInstructions)),
       {error, Reason};
     Instructions2 -> Instructions2
