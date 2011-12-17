@@ -90,7 +90,7 @@ drop_column(#adapter{module = Module, info = Info}, Table, Column) ->
   Module:drop_column(Info, Table, Column).
 
 
--spec restore_table_instructions(Adapter, Version, Table) -> ok when
+-spec restore_table_instructions(Adapter, Version, Table) -> migration_instructions() when
   Adapter :: #adapter{},
   Version :: version(),
   Table :: table().
@@ -98,7 +98,7 @@ restore_table_instructions(#adapter{module = Module, info = Info}, Version, Tabl
   Module:restore_table_instructions(Info, Version, Table).
 
 
--spec restore_column_instruction(Adapter, Version, Table, Column) -> ok when
+-spec restore_column_instruction(Adapter, Version, Table, Column) -> migration_instruction() when
   Adapter :: #adapter{},
   Version :: version(),
   Table :: table(),
