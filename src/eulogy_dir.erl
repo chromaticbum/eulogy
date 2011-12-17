@@ -23,14 +23,14 @@ db_info(Dir) ->
   Reason :: atom().
 db_info_file(File) ->
   case file:consult(File) of
-    {ok, Terms} -> db_info_terms(Terms);
+    {ok, Terms} -> {ok, db_info_terms(Terms)};
     {error, Reason} -> {error, Reason}
   end.
 
 db_info_terms(Terms) ->
   [{database, Conf}] = Terms,
 
-  Adapter = proplists:get_value(adapter, Conf),
+  Adapter = list_to_atom(proplists:get_value(adapter, Conf)),
   User = proplists:get_value(user, Conf),
   Password = proplists:get_value(password, Conf),
   Host = proplists:get_value(host, Conf),
@@ -52,7 +52,7 @@ db_info_terms(Terms) ->
 
 db_info1() ->
   #db_info{
-    adapter = "test",
+    adapter = test,
     user = "eulogy_test",
     password = "eulogy",
     host = "localhost",
@@ -62,13 +62,13 @@ db_info1() ->
 
 db_info_test() ->
   ?assertEqual(
-    db_info1(),
+    {ok, db_info1()},
     db_info(?TEST_DIR)
   ).
 
 db_info_file_test() ->
   ?assertEqual(
-    db_info1(),
+    {ok, db_info1()},
     db_info_file(filename:join(?TEST_DIR, "database.config"))
   ),
 

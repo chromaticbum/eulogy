@@ -3,6 +3,7 @@
 -include("eulogy.hrl").
 
 -export([
+    create/1,
     version/1,
     update_version/2,
 
@@ -11,6 +12,18 @@
     add_column/3,
     drop_column/3
   ]).
+
+
+-spec create(DbInfo) -> Adapter when
+  DbInfo :: #db_info{},
+  Adapter :: #adapter{}.
+create(#db_info{adapter = Adapter} = DbInfo) ->
+  Module = list_to_atom(lists:concat(["eu_", Adapter])),
+
+  #adapter{
+    module = Module,
+    info = Module:create(DbInfo)
+  }.
 
 
 -spec version(Adapter) -> Version when

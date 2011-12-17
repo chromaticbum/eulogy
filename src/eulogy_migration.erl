@@ -35,15 +35,15 @@ invert_migration(#migration{instructions = Instructions} = Migration) ->
 
 -spec invert_instruction(Instruction) -> Instruction2 when
   Instruction :: migration_instruction(),
-  Instruction2 :: migration_instruction().
+  Instruction2 :: migration_instruction_inverted().
 invert_instruction({create_table, Table, _Columns}) ->
   {drop_table, Table};
 invert_instruction({drop_table, Table}) ->
   {restore_table, Table};
-invert_instruction({add_column, {Table, Column}}) ->
-  {remove_column, {Table, element(1, Column)}};
-invert_instruction({remove_column, {Table, Column}}) ->
-  {restore_column, {Table, Column}}.
+invert_instruction({add_column, Table, Column}) ->
+  {drop_column, Table, element(1, Column)};
+invert_instruction({drop_column, Table, Column}) ->
+  {restore_column, Table, Column}.
 
 
 -spec run(Adapter, Migration) -> ok when
@@ -80,8 +80,8 @@ migration1() ->
     instructions = [
       {create_table, players, [{id, int, [primary]}]},
       {drop_table, games},
-      {add_column, {players, {name, string}}},
-      {remove_column, {players, country}}
+      {add_column, players, {name, string}},
+      {drop_column, players, country}
     ]
   }.
 
@@ -93,17 +93,17 @@ eu_test1() ->
 
 execute_test() ->
   Adapter = eu_test1(),
-  ?assertEqual(create_table, execute(Adapter, {create_table, players, []})),
-  ?assertEqual(drop_table, execute(Adapter, {drop_table, players})),
-  ?assertEqual(add_column, execute(Adapter, {add_column, players, {country, string, []}})),
-  ?assertEqual(drop_column, execute(Adapter, {drop_column, players, country})).
+  ?assertEqual(ok, execute(Adapter, {create_table, players, [{id, int, [primary]}]})),
+  ?assertEqual(ok, execute(Adapter, {drop_table, players})),
+  ?assertEqual(ok, execute(Adapter, {add_column, players, {country, string}})),
+  ?assertEqual(ok, execute(Adapter, {drop_column, players, country})).
 
 invert_migration_test() ->
   #migration{instructions = Instructions} = invert_migration(migration1()),
   ?assertEqual(
     [
-      {restore_column, {players, country}},
-      {remove_column, {players, name}},
+      {restore_column, players, country},
+      {drop_column, players, name},
       {restore_table, games},
       {drop_table, players}
     ], Instructions
@@ -119,10 +119,10 @@ invert_instruction_test() ->
     invert_instruction({drop_table, players})
   ),
   ?assertEqual(
-    {remove_column, {players, name}},
-    invert_instruction({add_column, {players, {name, string}}})
+    {drop_column, players, name},
+    invert_instruction({add_column, players, {name, string}})
   ),
   ?assertEqual(
-    {restore_column, {players, name}},
-    invert_instruction({remove_column, {players, name}})
+    {restore_column, players, name},
+    invert_instruction({drop_column, players, name})
   ).

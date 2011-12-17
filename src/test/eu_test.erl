@@ -14,8 +14,8 @@
 create(_DbInfo) -> test_adapter.
 version(_Info) -> "1337".
 update_version(_Info, _Version) -> ok.
-create_table(_Info, _Table, _Columns) -> create_table.
-drop_table(_Info, _Table) -> drop_table.
-add_column(_Info, _Table, _Column) -> add_column.
-drop_column(_Info, _Table, _Column) -> drop_column.
+create_table(_Info, _Table, _Columns) -> ok.
+drop_table(_Info, _Table) -> ok.
+add_column(_Info, _Table, _Column) -> ok.
+drop_column(_Info, _Table, _Column) -> ok.
 

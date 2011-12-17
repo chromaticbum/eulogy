@@ -10,35 +10,24 @@
     generate_migration/2
   ]).
 
--spec migrate_dir(Dir) -> {ok, migrated} | {error, Reason} when
+-spec migrate_dir(Dir) -> ok | {error, Reason} when
   Dir :: filename(),
   Reason :: atom().
 migrate_dir(Dir) ->
-  DbInfo = eulogy_dir:db_info(Dir),
-  migrate_dir(Dir, DbInfo).
+  case eulogy_dir:db_info(Dir) of
+    {ok, DbInfo} -> migrate_dir(Dir, DbInfo);
+    {error, Reason} -> {error, Reason}
+  end.
 
 
--spec migrate_dir(Dir, DbInfo) -> {ok, migrated} | {error, Reason} when
+-spec migrate_dir(Dir, DbInfo) -> ok when
   Dir :: filename(),
-  DbInfo :: #db_info{},
-  Reason :: atom().
+  DbInfo :: #db_info{}.
 migrate_dir(Dir, DbInfo) ->
-  Adapter = create_adapter(DbInfo),
+  Adapter = eulogy_adapter:create(DbInfo),
   run_migrations(Dir, Adapter),
 
-  {ok, migrated}.
-
-
--spec create_adapter(DbInfo) -> Adapter when
-  DbInfo :: #db_info{},
-  Adapter :: #adapter{}.
-create_adapter(#db_info{adapter = Adapter} = DbInfo) ->
-  Module = list_to_atom(lists:concat(["eu_", Adapter])),
-
-  #adapter{
-    module = Module,
-    info = Module:create(DbInfo)
-  }.
+  ok.
 
 
 -spec generate_migration(Dir, Name) -> {ok, FileName} | {error, Reason} when
@@ -51,26 +40,23 @@ generate_migration(Dir, Name) ->
   Filename = io_lib:format("~s_~4.4.0p~2.2.0p~2.2.0p~2.2.0p~2.2.0p~2.2.0p",
     [Name, Year, Month, Day, Hour, Minutes, Seconds]),
 
-  File = file:open(filename:join(Dir, Filename), write),
-  file:close(File).
+  case file:open(filename:join(Dir, Filename), write) of
+    {ok, File} -> file:close(File);
+    {error, Reason} -> {error, Reason}
+  end.
 
 
--spec run_migrations(Dir, Adapter) -> ok | {error, Reason} when
+-spec run_migrations(Dir, Adapter) -> ok when
   Dir :: filename(),
-  Adapter :: #adapter{},
-  Reason :: atom().
+  Adapter :: #adapter{}.
 run_migrations(Dir, Adapter) ->
   Version = eulogy_adapter:version(Adapter),
   Migrations = migrations(Dir, Version),
 
   lists:foreach(
     fun(Migration) ->
-        case Migration of
-          {ok, Conf} ->
-            eulogy_migration:run(Adapter, Conf, up),
-            eulogy_adapter:update_version(Adapter, Version);
-          {error, Reason} -> {error, Reason}
-        end
+        eulogy_migration:run(Adapter, Migration, up),
+        eulogy_adapter:update_version(Adapter, Migration#migration.version)
     end, Migrations
   ),
   ok.
@@ -142,7 +128,7 @@ list_dir(Dir, RegEx) ->
 
 db_info1() ->
   #db_info{
-    adapter = "test",
+    adapter = test,
     user = "eulogy_test",
     password = "eulogy",
     host = "localhost",
@@ -161,16 +147,6 @@ versioned_migrations_test() ->
   ],
 
   ?assertEqual(Match, versioned_migrations(?TEST_DIR, Filenames)).
-
-% migration_files_test() ->
-%   Versions = lists:map(
-%     fun({Version, _Migration}) -> Version end,
-%     migration_files(?TEST_DIR, "20110417123403")
-%   ),
-%   ?assertEqual(
-%     lists:sort(["20110417123404", "20110417123405"]),
-%     lists:sort(Versions)
-%   ).
 
 generate_migration_test() ->
   generate_migration(?TEST_DIR, "add_records_table"),
