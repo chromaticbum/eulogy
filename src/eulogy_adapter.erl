@@ -7,11 +7,13 @@
     stop/1,
     version/1,
     store_instruction/3,
+    delete_instruction/3,
 
     create_table/3,
     drop_table/2,
     add_column/3,
-    drop_column/3
+    drop_column/3,
+    restore_table_instructions/3
   ]).
 
 
@@ -48,6 +50,14 @@ store_instruction(#adapter{module = Module, info = Info}, Migration, Instruction
   Module:store_instruction(Info, Migration, Instruction).
 
 
+-spec delete_instruction(Adapter, Migration, Instruction) -> ok when
+  Adapter :: #adapter{},
+  Migration :: migration(),
+  Instruction :: migration_instruction().
+delete_instruction(#adapter{module = Module, info = Info}, Migration, Instruction) ->
+  Module:delete_instruction(Info, Migration, Instruction).
+
+
 -spec create_table(Adapter, Table, Columns) -> ok when
   Adapter :: #adapter{},
   Table :: table(),
@@ -77,3 +87,11 @@ add_column(#adapter{module = Module, info = Info}, Table, Column) ->
   Column :: column_name().
 drop_column(#adapter{module = Module, info = Info}, Table, Column) ->
   Module:drop_column(Info, Table, Column).
+
+
+-spec restore_table_instructions(Adapter, Version, Table) -> ok when
+  Adapter :: #adapter{},
+  Version :: version(),
+  Table :: table().
+restore_table_instructions(#adapter{module = Module, info = Info}, Version, Table) ->
+  Module:restore_table_instructions(Info, Version, Table).

@@ -9,15 +9,25 @@
     run/3
   ]).
 
+
 -spec run(Adapter, Migration, Direction) -> ok when
   Adapter :: #adapter{},
   Migration :: migration(),
   Direction :: migration_direction().
 run(Adapter, Migration, Direction) ->
-  case Direction of
-    up -> run(Adapter, Migration);
-    down -> run(Adapter, invert_migration(Migration))
-  end.
+  io:format("DIR: ~p~n", [Direction]),
+
+  Migration2 = case Direction of
+    up -> Migration;
+    down -> invert_migration(Migration)
+  end,
+
+  lists:foreach(
+    fun(Instruction) -> run_instruction(Adapter, Migration2, Instruction, Direction) end,
+    Migration2#migration.instructions
+  ),
+
+  ok.
 
 
 -spec invert_migration(Migration) -> Migration2 when
@@ -46,31 +56,44 @@ invert_instruction({drop_column, Table, Column}) ->
   {restore_column, Table, Column}.
 
 
--spec run(Adapter, Migration) -> ok when
+-spec run_instruction(Adapter, Migration, Instruction, Direction) -> ok when
   Adapter :: #adapter{},
-  Migration :: migration().
-run(Adapter, #migration{instructions = Instructions} = Migration) ->
-  lists:foreach(
-    fun(Instruction) ->
-        execute(Adapter, Instruction),
-        eulogy_adapter:store_instruction(Adapter, Migration, Instruction)
-    end, Instructions
-  ),
+  Migration :: migration(),
+  Instruction :: migration_instruction(),
+  Direction :: migration_direction().
+run_instruction(Adapter, Migration, Instruction, up) ->
+  execute(Adapter, Migration, Instruction),
+  eulogy_adapter:store_instruction(Adapter, Migration, Instruction);
+run_instruction(Adapter, Migration, Instruction, down) ->
+  execute(Adapter, Migration, Instruction),
+  eulogy_adapter:delete_instruction(Adapter, Migration, Instruction).
 
+
+-spec execute(Adapter, Migration, Instruction) -> ok when
+  Adapter :: #adapter{},
+  Migration :: migration(),
+  Instruction :: migration_instruction().
+execute(Adapter, _Migration, {create_table, Table, Columns}) ->
+  eulogy_adapter:create_table(Adapter, Table, Columns);
+execute(Adapter, _Migration, {drop_table, Table}) ->
+  eulogy_adapter:drop_table(Adapter, Table);
+execute(Adapter, _Migration, {add_column, Table, Column}) ->
+  eulogy_adapter:add_column(Adapter, Table, Column);
+execute(Adapter, _Migration, {drop_column, Table, Column}) ->
+  eulogy_adapter:drop_column(Adapter, Table, Column);
+execute(Adapter, Migration, {restore_table, Table}) ->
+  restore_table(Adapter, Migration, Table).
+
+
+-spec restore_table(Adapter, Migration, Table) -> ok when
+  Adapter :: #adapter{},
+  Migration :: migration(),
+  Table :: table().
+restore_table(Adapter, #migration{version = Version} = Migration, Table) ->
+  Instructions = eulogy_adapter:restore_table_instructions(Adapter, Version, Table),
+  lists:foreach(fun(Instruction) -> execute(Adapter, Migration, Instruction) end, Instructions),
   ok.
 
-
--spec execute(Adapter, Instruction) -> ok when
-  Adapter :: #adapter{},
-  Instruction :: migration_instruction().
-execute(Adapter, {create_table, Table, Columns}) ->
-  eulogy_adapter:create_table(Adapter, Table, Columns);
-execute(Adapter, {drop_table, Table}) ->
-  eulogy_adapter:drop_table(Adapter, Table);
-execute(Adapter, {add_column, Table, Column}) ->
-  eulogy_adapter:add_column(Adapter, Table, Column);
-execute(Adapter, {drop_column, Table, Column}) ->
-  eulogy_adapter:drop_column(Adapter, Table, Column).
 
 % TESTS
 
@@ -94,10 +117,11 @@ eu_test1() ->
 
 execute_test() ->
   Adapter = eu_test1(),
-  ?assertEqual(ok, execute(Adapter, {create_table, players, [{id, int, [primary]}]})),
-  ?assertEqual(ok, execute(Adapter, {drop_table, players})),
-  ?assertEqual(ok, execute(Adapter, {add_column, players, {country, string}})),
-  ?assertEqual(ok, execute(Adapter, {drop_column, players, country})).
+  Migration = migration1(),
+  ?assertEqual(ok, execute(Adapter, Migration, {create_table, players, [{id, int, [primary]}]})),
+  ?assertEqual(ok, execute(Adapter, Migration, {drop_table, players})),
+  ?assertEqual(ok, execute(Adapter, Migration, {add_column, players, {country, string}})),
+  ?assertEqual(ok, execute(Adapter, Migration, {drop_column, players, country})).
 
 invert_migration_test() ->
   #migration{instructions = Instructions} = invert_migration(migration1()),

@@ -6,12 +6,31 @@
 
 -define(MIGRATION_DIR, "eulogy").
 
+-define(DEFAULT_TARGET_VERSION, "99999999999999").
+
 % API exports
 -export([
     migrate_app/1, migrate_app/2,
     migrate_dir/1, migrate_dir/2,
+    migrate/3,
     generate_migration/2
   ]).
+
+
+-spec generate_migration(Dir, Name) -> {ok, FileName} | {error, Reason} when
+  Dir :: filename(),
+  Name :: string(),
+  FileName :: string(),
+  Reason :: atom().
+generate_migration(Dir, Name) ->
+  {{Year, Month, Day}, {Hour, Minutes, Seconds}} = erlang:localtime(),
+  Filename = io_lib:format("~s_~4.4.0w~2.2.0w~2.2.0w~2.2.0w~2.2.0w~2.2.0w",
+    [Name, Year, Month, Day, Hour, Minutes, Seconds]),
+
+  case file:open(filename:join(Dir, Filename), write) of
+    {ok, File} -> file:close(File);
+    {error, Reason} -> {error, Reason}
+  end.
 
 
 -spec migrate_app(App) -> ok | {error, Reason} when
@@ -42,62 +61,71 @@ migrate_dir(Dir) ->
   Dir :: filename(),
   DbInfo :: #db_info{}.
 migrate_dir(Dir, DbInfo) ->
+  migrate(Dir, DbInfo, []).
+
+
+-spec migrate(Dir, DbInfo, Conf) -> ok when
+  Dir :: filename(),
+  DbInfo :: #db_info{},
+  Conf :: [term()].
+migrate(Dir, DbInfo, Conf) ->
   Adapter = eulogy_adapter:create(DbInfo),
-  run_migrations(Dir, Adapter),
+
+  TargetVersion = proplists:get_value(target_version, Conf, ?DEFAULT_TARGET_VERSION),
+  Version = eulogy_adapter:version(Adapter),
+
+  Direction = case {(TargetVersion < Version), TargetVersion} of
+    {_, ""} -> down;
+    {true, _} -> down;
+    {false, _} -> up
+  end,
+
+  Migrations = migrations(Dir, min(Version, TargetVersion), max(Version, TargetVersion), Direction),
+  run_migrations(Adapter, Migrations, Direction),
+
   eulogy_adapter:stop(Adapter),
 
   ok.
 
 
--spec generate_migration(Dir, Name) -> {ok, FileName} | {error, Reason} when
-  Dir :: filename(),
-  Name :: string(),
-  FileName :: string(),
-  Reason :: atom().
-generate_migration(Dir, Name) ->
-  {{Year, Month, Day}, {Hour, Minutes, Seconds}} = erlang:localtime(),
-  Filename = io_lib:format("~s_~4.4.0w~2.2.0w~2.2.0w~2.2.0w~2.2.0w~2.2.0w",
-    [Name, Year, Month, Day, Hour, Minutes, Seconds]),
-
-  case file:open(filename:join(Dir, Filename), write) of
-    {ok, File} -> file:close(File);
-    {error, Reason} -> {error, Reason}
-  end.
-
-
--spec run_migrations(Dir, Adapter) -> ok when
-  Dir :: filename(),
-  Adapter :: #adapter{}.
-run_migrations(Dir, Adapter) ->
-  Version = eulogy_adapter:version(Adapter),
-  Migrations = migrations(Dir, Version),
-
+-spec run_migrations(Adapter, Migrations, Direction) -> ok when
+  Adapter :: #adapter{},
+  Migrations :: migrations(),
+  Direction :: migration_direction().
+run_migrations(Adapter, Migrations, Direction) ->
   error_logger:info_msg("Running migrations: ~p~n", [Migrations]),
 
   lists:foreach(
     fun(Migration) ->
-        eulogy_migration:run(Adapter, Migration, up)
+        eulogy_migration:run(Adapter, Migration, Direction)
     end, Migrations
   ),
   ok.
 
 
--spec migrations(Dir, Version) -> [{Version2, File}] | {error, Reason} when
+-spec migrations(Dir, Low, High, Direction) -> [{Version, File}] | {error, Reason} when
   Dir :: filename(),
-  Version :: string(),
-  Version2 :: version(),
+  Low :: version(),
+  High :: version(),
+  Direction :: migration_direction(),
+  Version :: version(),
   File :: string(),
   Reason :: atom().
-migrations(Dir, Version) ->
+migrations(Dir, Low, High, Direction) ->
   case list_dir(Dir, "^.*_(\\d{14,14})") of
     {error, Reason} -> {error, Reason};
     Files ->
-      Migrations = versioned_migrations(Dir, Files),
-      lists:filter(
-        fun(#migration{version = Version2}) -> (Version2 > Version) end,
-        Migrations
-      )
+      Versioned = versioned_migrations(Dir, Files),
+      Migrations = lists:filter(
+        fun(#migration{version = Version}) -> ((Version >= Low) andalso (Version =< High)) end,
+        Versioned
+      ),
+      case Direction of
+        up -> Migrations;
+        down -> lists:reverse(Migrations)
+      end
   end.
+
 
 -spec versioned_migrations(Dir, Files) -> Migrations when
   Dir :: filename(),
