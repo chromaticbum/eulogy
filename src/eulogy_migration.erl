@@ -23,13 +23,14 @@ run(Adapter, Migration, Direction) ->
 -spec invert_migration(Migration) -> Migration2 when
   Migration :: migration(),
   Migration2 :: migration().
-invert_migration(Migration) ->
-  lists:reverse(
+invert_migration(#migration{instructions = Instructions} = Migration) ->
+  Instructions2 = lists:reverse(
     lists:map(
       fun(Instruction) -> invert_instruction(Instruction) end,
-      Migration
+      Instructions
     )
-  ).
+  ),
+  Migration#migration{instructions = Instructions2}.
 
 
 -spec invert_instruction(Instruction) -> Instruction2 when
@@ -48,11 +49,11 @@ invert_instruction({remove_column, {Table, Column}}) ->
 -spec run(Adapter, Migration) -> ok when
   Adapter :: #adapter{},
   Migration :: migration().
-run(Adapter, Migration) ->
+run(Adapter, #migration{instructions = Instructions}) ->
   lists:foreach(
     fun(Instruction) ->
         execute(Adapter, Instruction)
-    end, Migration
+    end, Instructions
   ),
 
   ok.
@@ -73,12 +74,16 @@ execute(Adapter, {drop_column, Table, Column}) ->
 % TESTS
 
 migration1() ->
-  [
-    {create_table, players, [{id, int, [primary]}]},
-    {drop_table, games},
-    {add_column, {players, {name, string}}},
-    {remove_column, {players, country}}
-  ].
+  #migration {
+    version = "19880417123456",
+    file = "bootstrap_19880417123456",
+    instructions = [
+      {create_table, players, [{id, int, [primary]}]},
+      {drop_table, games},
+      {add_column, {players, {name, string}}},
+      {remove_column, {players, country}}
+    ]
+  }.
 
 eu_test1() ->
   #adapter{
@@ -94,13 +99,14 @@ execute_test() ->
   ?assertEqual(drop_column, execute(Adapter, {drop_column, players, country})).
 
 invert_migration_test() ->
+  #migration{instructions = Instructions} = invert_migration(migration1()),
   ?assertEqual(
     [
       {restore_column, {players, country}},
       {remove_column, {players, name}},
       {restore_table, games},
       {drop_table, players}
-    ], invert_migration(migration1())
+    ], Instructions
   ).
 
 invert_instruction_test() ->

@@ -55,58 +55,64 @@ generate_migration(Dir, Name) ->
   file:close(File).
 
 
--spec run_migrations(Dir, Adapter) -> ok when
+-spec run_migrations(Dir, Adapter) -> ok | {error, Reason} when
   Dir :: filename(),
-  Adapter :: #adapter{}.
+  Adapter :: #adapter{},
+  Reason :: atom().
 run_migrations(Dir, Adapter) ->
   Version = eulogy_adapter:version(Adapter),
-  Files = migration_files(Dir, Version),
+  Migrations = migrations(Dir, Version),
 
   lists:foreach(
-    fun({Version, File}) ->
-        Migration = file:consult(filename:join(Dir, File)),
+    fun(Migration) ->
         case Migration of
           {ok, Conf} ->
             eulogy_migration:run(Adapter, Conf, up),
             eulogy_adapter:update_version(Adapter, Version);
-          {error, Reason} -> ok
+          {error, Reason} -> {error, Reason}
         end
-    end, Files
+    end, Migrations
   ),
   ok.
 
 
--spec migration_files(Dir, Version) -> [{Version2, File}] | {error, Reason} when
+-spec migrations(Dir, Version) -> [{Version2, File}] | {error, Reason} when
   Dir :: filename(),
   Version :: string(),
   Version2 :: version(),
   File :: string(),
   Reason :: atom().
-migration_files(Dir, Version) ->
+migrations(Dir, Version) ->
   case list_dir(Dir, "^.*_(\\d{14,14})") of
     {error, Reason} -> {error, Reason};
     Files ->
-      Versioned = version_migrations(Files),
+      Migrations = versioned_migrations(Dir, Files),
       lists:filter(
-        fun({Version2, _Migration}) -> (Version2 > Version) end,
-        Versioned
+        fun(#migration{version = Version2}) -> (Version2 > Version) end,
+        Migrations
       )
   end.
 
--spec version_migrations(Migrations) -> [filename()] when
-  Migrations :: [filename()].
-version_migrations(Migrations) ->
+-spec versioned_migrations(Dir, Files) -> Migrations when
+  Dir :: filename(),
+  Files :: [filename()],
+  Migrations :: migrations().
+versioned_migrations(Dir, Files) ->
   {ok, Matcher} = re:compile("^.*_(\\d{14,14})"),
 
   lists:map(
-    fun(Migration) ->
-        case re:split(Migration, Matcher) of
-          nomatch -> {"", Migration};
+    fun(File) ->
+        case re:split(File, Matcher) of
           MatchList ->
             Version = binary_to_list(lists:nth(2, MatchList)),
-            {Version, Migration}
+            {ok, Instructions} = file:consult(filename:join(Dir, File)),
+            #migration{
+              version = Version,
+              file = File,
+              instructions = Instructions
+            }
         end
-    end, Migrations
+    end, Files
   ).
 
 -spec list_dir(Dir, RegEx) -> [filename()] | {error, Reason} when
@@ -144,30 +150,27 @@ db_info1() ->
     database = "eulogy_test"
   }.
 
-
-% TESTS
-
-version_migrations_test() ->
+versioned_migrations_test() ->
   Match = [
-    {"11111111111101", "file_11111111111101"},
-    {"11111111111102", "file_11111111111102"}
+    #migration{version = "20110417123401", file = "create_a_records_table_20110417123401", instructions = []},
+    #migration{version = "20110417123404", file = "add_length_to_records_table_20110417123404", instructions = []}
   ],
   Filenames = [
-    "file_11111111111101",
-    "file_11111111111102"
+    "create_a_records_table_20110417123401",
+    "add_length_to_records_table_20110417123404"
   ],
 
-  ?assertMatch(Match, version_migrations(Filenames)).
+  ?assertEqual(Match, versioned_migrations(?TEST_DIR, Filenames)).
 
-migration_files_test() ->
-  Versions = lists:map(
-    fun({Version, _Migration}) -> Version end,
-    migration_files(?TEST_DIR, "20110417123403")
-  ),
-  ?assertEqual(
-    lists:sort(["20110417123404", "20110417123405"]),
-    lists:sort(Versions)
-  ).
+% migration_files_test() ->
+%   Versions = lists:map(
+%     fun({Version, _Migration}) -> Version end,
+%     migration_files(?TEST_DIR, "20110417123403")
+%   ),
+%   ?assertEqual(
+%     lists:sort(["20110417123404", "20110417123405"]),
+%     lists:sort(Versions)
+%   ).
 
 generate_migration_test() ->
   generate_migration(?TEST_DIR, "add_records_table"),
