@@ -10,8 +10,8 @@
 
 % API exports
 -export([
-    migrate_app/1, migrate_app/2,
-    migrate_dir/1, migrate_dir/2,
+    migrate_app/2,
+    migrate_dir/2,
     migrate/3,
     generate_migration/2
   ]).
@@ -33,35 +33,23 @@ generate_migration(Dir, Name) ->
   end.
 
 
--spec migrate_app(App) -> ok | {error, Reason} when
+-spec migrate_app(App, Conf) -> ok | {error, Reason} when
   App :: atom(),
+  Conf :: [term()],
   Reason :: atom().
-migrate_app(App) ->
-  migrate_dir(filename:join(code:priv_dir(App), ?MIGRATION_DIR)).
+migrate_app(App, Conf) ->
+  migrate_dir(filename:join(code:priv_dir(App), ?MIGRATION_DIR), Conf).
 
 
--spec migrate_app(App, DbInfo) -> ok when
-  App :: atom(),
-  DbInfo :: #db_info{}.
-migrate_app(App, DbInfo) ->
-  migrate_dir(filename:join(code:priv_dir(App), ?MIGRATION_DIR), DbInfo).
-
-
--spec migrate_dir(Dir) -> ok | {error, Reason} when
+-spec migrate_dir(Dir, Conf) -> ok | {error, Reason} when
   Dir :: filename(),
+  Conf :: [term()],
   Reason :: atom().
-migrate_dir(Dir) ->
+migrate_dir(Dir, Conf) ->
   case eulogy_dir:db_info(Dir) of
-    {ok, DbInfo} -> migrate_dir(Dir, DbInfo);
+    {ok, DbInfo} -> migrate(Dir, DbInfo, Conf);
     {error, Reason} -> {error, Reason}
   end.
-
-
--spec migrate_dir(Dir, DbInfo) -> ok when
-  Dir :: filename(),
-  DbInfo :: #db_info{}.
-migrate_dir(Dir, DbInfo) ->
-  migrate(Dir, DbInfo, []).
 
 
 -spec migrate(Dir, DbInfo, Conf) -> ok when
