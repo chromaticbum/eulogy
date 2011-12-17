@@ -13,7 +13,8 @@
     drop_table/2,
     add_column/3,
     drop_column/3,
-    restore_table_instructions/3
+    restore_table_instructions/3,
+    restore_column_instruction/4
   ]).
 
 
@@ -95,3 +96,12 @@ drop_column(#adapter{module = Module, info = Info}, Table, Column) ->
   Table :: table().
 restore_table_instructions(#adapter{module = Module, info = Info}, Version, Table) ->
   Module:restore_table_instructions(Info, Version, Table).
+
+
+-spec restore_column_instruction(Adapter, Version, Table, Column) -> ok when
+  Adapter :: #adapter{},
+  Version :: version(),
+  Table :: table(),
+  Column :: column_name().
+restore_column_instruction(#adapter{module = Module, info = Info}, Version, Table, Column) ->
+  Module:restore_column_instruction(Info, Version, Table, Column).

@@ -80,7 +80,14 @@ migrate(Dir, DbInfo, Conf) ->
     {false, _} -> up
   end,
 
-  Migrations = migrations(Dir, min(Version, TargetVersion), max(Version, TargetVersion), Direction),
+  Migrations = lists:sort(
+    fun(#migration{version = Version2}, #migration{version = Version3}) ->
+        case Direction of
+          down -> Version2 >= Version3;
+          up -> Version2 =< Version3
+        end
+    end, migrations(Dir, min(Version, TargetVersion), max(Version, TargetVersion))
+  ),
   run_migrations(Adapter, Migrations, Direction),
 
   eulogy_adapter:stop(Adapter),
@@ -103,27 +110,22 @@ run_migrations(Adapter, Migrations, Direction) ->
   ok.
 
 
--spec migrations(Dir, Low, High, Direction) -> [{Version, File}] | {error, Reason} when
+-spec migrations(Dir, Low, High) -> [{Version, File}] | {error, Reason} when
   Dir :: filename(),
   Low :: version(),
   High :: version(),
-  Direction :: migration_direction(),
   Version :: version(),
   File :: string(),
   Reason :: atom().
-migrations(Dir, Low, High, Direction) ->
+migrations(Dir, Low, High) ->
   case list_dir(Dir, "^.*_(\\d{14,14})") of
     {error, Reason} -> {error, Reason};
     Files ->
       Versioned = versioned_migrations(Dir, Files),
-      Migrations = lists:filter(
-        fun(#migration{version = Version}) -> ((Version >= Low) andalso (Version =< High)) end,
+      lists:filter(
+        fun(#migration{version = Version}) -> ((Version > Low) andalso (Version =< High)) end,
         Versioned
-      ),
-      case Direction of
-        up -> Migrations;
-        down -> lists:reverse(Migrations)
-      end
+      )
   end.
 
 

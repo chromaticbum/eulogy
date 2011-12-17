@@ -82,7 +82,9 @@ execute(Adapter, _Migration, {add_column, Table, Column}) ->
 execute(Adapter, _Migration, {drop_column, Table, Column}) ->
   eulogy_adapter:drop_column(Adapter, Table, Column);
 execute(Adapter, Migration, {restore_table, Table}) ->
-  restore_table(Adapter, Migration, Table).
+  restore_table(Adapter, Migration, Table);
+execute(Adapter, Migration, {restore_column, Table, Column}) ->
+  restore_column(Adapter, Migration, Table, Column).
 
 
 -spec restore_table(Adapter, Migration, Table) -> ok when
@@ -92,6 +94,17 @@ execute(Adapter, Migration, {restore_table, Table}) ->
 restore_table(Adapter, #migration{version = Version} = Migration, Table) ->
   Instructions = eulogy_adapter:restore_table_instructions(Adapter, Version, Table),
   lists:foreach(fun(Instruction) -> execute(Adapter, Migration, Instruction) end, Instructions),
+  ok.
+
+
+-spec restore_column(Adapter, Migration, Table, Column) -> ok when
+  Adapter :: #adapter{},
+  Migration :: migration(),
+  Table :: table(),
+  Column :: column_name().
+restore_column(Adapter, #migration{version = Version} = Migration, Table, Column) ->
+  Instruction = eulogy_adapter:restore_column_instruction(Adapter, Version, Table, Column),
+  execute(Adapter, Migration, Instruction),
   ok.
 
 
