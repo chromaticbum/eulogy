@@ -10,24 +10,20 @@
   ]).
 
 
--spec run(Adapter, Migration, Direction) -> ok when
+-spec run(Adapter, Migration, Direction) -> ok | {error, string()} when
   Adapter :: #adapter{},
   Migration :: migration(),
   Direction :: migration_direction().
 run(Adapter, Migration, Direction) ->
-  io:format("DIR: ~p~n", [Direction]),
-
   Migration2 = case Direction of
     up -> Migration;
     down -> invert_migration(Migration)
   end,
 
-  lists:foreach(
-    fun(Instruction) -> run_instruction(Adapter, Migration2, Instruction, Direction) end,
-    Migration2#migration.instructions
-  ),
-
-  ok.
+  run_instructions(
+    fun(Adapter2, Migration3, Instruction) -> run_instruction(Adapter2, Migration3, Instruction, Direction) end,
+    Adapter, Migration2, Migration2#migration.instructions
+  ).
 
 
 -spec invert_migration(Migration) -> Migration2 when
@@ -56,20 +52,24 @@ invert_instruction({drop_column, Table, Column}) ->
   {restore_column, Table, Column}.
 
 
--spec run_instruction(Adapter, Migration, Instruction, Direction) -> ok when
+-spec run_instruction(Adapter, Migration, Instruction, Direction) -> ok | {error, string} when
   Adapter :: #adapter{},
   Migration :: migration(),
   Instruction :: migration_instruction(),
   Direction :: migration_direction().
 run_instruction(Adapter, Migration, Instruction, up) ->
-  execute(Adapter, Migration, Instruction),
-  eulogy_adapter:store_instruction(Adapter, Migration, Instruction);
+  case execute(Adapter, Migration, Instruction) of
+    ok -> eulogy_adapter:store_instruction(Adapter, Migration, Instruction);
+    {error, Reason} -> {error, Reason}
+  end;
 run_instruction(Adapter, Migration, Instruction, down) ->
-  execute(Adapter, Migration, Instruction),
-  eulogy_adapter:delete_instruction(Adapter, Migration, Instruction).
+  case execute(Adapter, Migration, Instruction) of
+    ok -> eulogy_adapter:delete_instruction(Adapter, Migration, Instruction);
+    {error, Reason} -> {error, Reason}
+  end.
 
 
--spec execute(Adapter, Migration, Instruction) -> ok when
+-spec execute(Adapter, Migration, Instruction) -> ok | {error, string()} when
   Adapter :: #adapter{},
   Migration :: migration(),
   Instruction :: migration_instruction().
@@ -87,25 +87,43 @@ execute(Adapter, Migration, {restore_column, Table, Column}) ->
   restore_column(Adapter, Migration, Table, Column).
 
 
--spec restore_table(Adapter, Migration, Table) -> ok when
+-spec restore_table(Adapter, Migration, Table) -> ok | {error, string()} when
   Adapter :: #adapter{},
   Migration :: migration(),
   Table :: table().
 restore_table(Adapter, #migration{version = Version} = Migration, Table) ->
-  Instructions = eulogy_adapter:restore_table_instructions(Adapter, Version, Table),
-  lists:foreach(fun(Instruction) -> execute(Adapter, Migration, Instruction) end, Instructions),
-  ok.
+  case eulogy_adapter:restore_table_instructions(Adapter, Version, Table) of
+    {error, Reason} -> {error, Reason};
+    Instructions ->
+      run_instructions(
+        fun(Adapter2, Migration2, Instruction) -> execute(Adapter2, Migration2, Instruction) end,
+        Adapter, Migration, Instructions
+      )
+  end.
 
 
--spec restore_column(Adapter, Migration, Table, Column) -> ok when
+-spec run_instructions(Fun, Adapter, Migration, Instructions) -> ok | {error, string} when
+  Fun :: Fun,
+  Adapter :: #adapter{},
+  Migration :: migration(),
+  Instructions :: migration_instructions().
+run_instructions(_Fun, _Adapter, _Migration, []) ->
+  ok;
+run_instructions(Fun, Adapter, Migration, [Instruction | Instructions]) ->
+  case Fun(Adapter, Migration, Instruction) of
+    ok -> run_instructions(Fun, Adapter, Migration, Instructions);
+    {error, Reason} -> {error, Reason}
+  end.
+
+
+-spec restore_column(Adapter, Migration, Table, Column) -> ok | {error, string()} when
   Adapter :: #adapter{},
   Migration :: migration(),
   Table :: table(),
   Column :: column_name().
 restore_column(Adapter, #migration{version = Version} = Migration, Table, Column) ->
   Instruction = eulogy_adapter:restore_column_instruction(Adapter, Version, Table, Column),
-  execute(Adapter, Migration, Instruction),
-  ok.
+  execute(Adapter, Migration, Instruction).
 
 
 % TESTS
