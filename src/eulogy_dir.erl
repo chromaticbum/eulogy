@@ -30,7 +30,7 @@ db_info_file(File) ->
 db_info_terms(Terms) ->
   [{database, Conf}] = Terms,
 
-  Adapter = list_to_atom(proplists:get_value(adapter, Conf)),
+  Adapter = proplists:get_value(adapter, Conf),
   User = proplists:get_value(user, Conf),
   Password = proplists:get_value(password, Conf),
   Host = proplists:get_value(host, Conf),

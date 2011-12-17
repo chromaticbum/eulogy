@@ -9,7 +9,10 @@
   timestamp |
   datetime.
 -type column_option() ::
-  primary.
+  primary |
+  unique |
+  auto_increment |
+  primary_id.
 -type column_options() :: [column_option()].
 
 -type column() ::

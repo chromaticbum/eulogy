@@ -37,7 +37,7 @@ migrate_dir(Dir, DbInfo) ->
   Reason :: atom().
 generate_migration(Dir, Name) ->
   {{Year, Month, Day}, {Hour, Minutes, Seconds}} = erlang:localtime(),
-  Filename = io_lib:format("~s_~4.4.0p~2.2.0p~2.2.0p~2.2.0p~2.2.0p~2.2.0p",
+  Filename = io_lib:format("~s_~4.4.0w~2.2.0w~2.2.0w~2.2.0w~2.2.0w~2.2.0w",
     [Name, Year, Month, Day, Hour, Minutes, Seconds]),
 
   case file:open(filename:join(Dir, Filename), write) of
@@ -52,6 +52,8 @@ generate_migration(Dir, Name) ->
 run_migrations(Dir, Adapter) ->
   Version = eulogy_adapter:version(Adapter),
   Migrations = migrations(Dir, Version),
+
+  error_logger:info_msg("Running migrations: ~p~n", [Migrations]),
 
   lists:foreach(
     fun(Migration) ->
