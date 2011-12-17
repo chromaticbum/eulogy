@@ -6,7 +6,7 @@
     create/1,
     stop/1,
     version/1,
-    update_version/2,
+    store_instruction/3,
 
     create_table/3,
     drop_table/2,
@@ -40,11 +40,12 @@ version(#adapter{module = Module, info = Info}) ->
   Module:version(Info).
 
 
--spec update_version(Adapter, Version) -> ok when
+-spec store_instruction(Adapter, Migration, Instruction) -> ok when
   Adapter :: #adapter{},
-  Version :: version().
-update_version(#adapter{module = Module, info = Info}, Version) ->
-  Module:update_version(Info, Version).
+  Migration :: migration(),
+  Instruction :: migration_instruction().
+store_instruction(#adapter{module = Module, info = Info}, Migration, Instruction) ->
+  Module:store_instruction(Info, Migration, Instruction).
 
 
 -spec create_table(Adapter, Table, Columns) -> ok when

@@ -1,5 +1,6 @@
 % Database types
 -type table() :: atom().
+-type timestamp() :: any().
 
 -type column_name() :: atom().
 -type column_type() ::
@@ -55,3 +56,13 @@
   }).
 -type migration() :: #migration{}.
 -type migrations() :: [migration()].
+
+-record(stored_instruction, {
+    version = "" :: version(),
+    file = "" :: filename(),
+    time_stamp :: timestamp(),
+    table = "" :: string(),
+    column = undefined :: undefined | string(),
+    instruction = "" :: string()
+  }).
+-type stored_instruction() :: #stored_instruction{}.

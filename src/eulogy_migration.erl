@@ -49,10 +49,11 @@ invert_instruction({drop_column, Table, Column}) ->
 -spec run(Adapter, Migration) -> ok when
   Adapter :: #adapter{},
   Migration :: migration().
-run(Adapter, #migration{instructions = Instructions}) ->
+run(Adapter, #migration{instructions = Instructions} = Migration) ->
   lists:foreach(
     fun(Instruction) ->
-        execute(Adapter, Instruction)
+        execute(Adapter, Instruction),
+        eulogy_adapter:store_instruction(Adapter, Migration, Instruction)
     end, Instructions
   ),
 

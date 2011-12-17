@@ -76,8 +76,7 @@ run_migrations(Dir, Adapter) ->
 
   lists:foreach(
     fun(Migration) ->
-        eulogy_migration:run(Adapter, Migration, up),
-        eulogy_adapter:update_version(Adapter, Migration#migration.version)
+        eulogy_migration:run(Adapter, Migration, up)
     end, Migrations
   ),
   ok.
