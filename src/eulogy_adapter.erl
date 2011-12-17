@@ -4,6 +4,7 @@
 
 -export([
     create/1,
+    stop/1,
     version/1,
     update_version/2,
 
@@ -24,6 +25,12 @@ create(#db_info{adapter = Adapter} = DbInfo) ->
     module = Module,
     info = Module:create(DbInfo)
   }.
+
+
+-spec stop(Adapter) -> ok when
+  Adapter :: #adapter{}.
+stop(#adapter{module = Module, info = Info}) ->
+  Module:stop(Info).
 
 
 -spec version(Adapter) -> Version when

@@ -44,6 +44,7 @@ migrate_dir(Dir) ->
 migrate_dir(Dir, DbInfo) ->
   Adapter = eulogy_adapter:create(DbInfo),
   run_migrations(Dir, Adapter),
+  eulogy_adapter:stop(Adapter),
 
   ok.
 
